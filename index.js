@@ -12,7 +12,8 @@ app.post('/upload', (req, res) => {
   if (image) {
     const filename = uuid.v4()+'.jpg';
     image.mv(path.resolve(__dirname,'static',filename)).then(() => {
-      const url = `${req.protocol}://${req.headers.host}/static/${filename}`;
+      const url = `https://${req.headers.host}/static/${filename}`;
+        console.log('url = ',url);
       res.send({ url });
     }).catch(err => res.status(500).send({ message: err.message }));
 
@@ -23,13 +24,17 @@ app.post('/upload', (req, res) => {
 
     const filename = uuid.v4()+'.webm';
     audio.mv(path.resolve(__dirname,'static',filename)).then(() => {
-      const url = `${req.protocol}://${req.headers.host}/static/${filename}`;
+      const url = `https://${req.headers.host}/static/${filename}`;
+        console.log('url = ',url);
       res.send({ url });
     }).catch(err => res.status(500).send({message:err.message}));
   } else res.status(400).send({ message: 'Missing image/audio field' });
 });
 
-const server = app.listen(8080, () => console.log('Listening at port 8080'));
+const server = app.listen(25556, () => {
+  console.log('Listening at port 25556');
+  console.log('Done!');
+});
 
 const RTC = new WebSocket.Server({ server });
 
@@ -76,4 +81,20 @@ RTC.on('connection', (socket, request) => {
       console.log(`WebSocket ${socket.id} disconnected`);
     }
   });
+});
+
+const fs = require('fs');
+
+app.get('/files', (req, res) => {
+    fs.readdir(path.resolve(__dirname, 'static'), (err, files) => {
+        if (err) {
+            return res.status(500).send({ message: 'Erro ao listar arquivos' });
+        }
+        const urls = files.map(file => `https://${req.headers.host}/static/${file}`);
+        res.send(urls);
+    });
+});
+
+app.get('/', (req, res) => {
+    res.sendFile(path.resolve(__dirname, 'index.html'));
 });

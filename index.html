@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Exibição de URLs</title>
+    <script>
+        let urls = [];
+        let itemsPerPage = 3;
+        let currentPage = 1;
+
+        async function fetchFiles() {
+            try {
+                const response = await fetch('/files');
+                urls = await response.json();
+                showPage(currentPage);
+            } catch (error) {
+                console.error('Erro ao carregar arquivos:', error);
+            }
+        }
+
+        function showPage(page) {
+            let container = document.getElementById("content");
+            container.innerHTML = "";
+            let start = (page - 1) * itemsPerPage;
+            let end = start + itemsPerPage;
+            let paginatedItems = urls.slice(start, end);
+
+            paginatedItems.forEach(url => {
+                if (url.endsWith(".webm")) {
+                    container.innerHTML += `<video width='300' controls><source src='${url}' type='video/webm'>Seu navegador não suporta vídeos.</video>`;
+                } else {
+                    container.innerHTML += `<img src='${url}' width='300' alt='Imagem'>`;
+                }
+            });
+            document.getElementById("page-number").innerText = `Página ${page}`;
+        }
+
+        function changePage(step) {
+            let totalPages = Math.ceil(urls.length / itemsPerPage);
+            if (currentPage + step >= 1 && currentPage + step <= totalPages) {
+                currentPage += step;
+                showPage(currentPage);
+            }
+        }
+
+        window.onload = fetchFiles;
+    </script>
+</head>
+<body>
+    <h2>Imagens e Vídeos</h2>
+    <div id="content"></div>
+    <div>
+        <button onclick="changePage(-1)">Anterior</button>
+        <span id="page-number">Página 1</span>
+        <button onclick="changePage(1)">Próximo</button>
+    </div>
+</body>
+</html>
