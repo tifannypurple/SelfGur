@@ -1,1 +1,0 @@
-Dessa forma sobe no pterodactyl ou dokploy
