@@ -1,7 +1,11 @@
 const Database = require('better-sqlite3');
+const fs = require('fs');
 const path = require('path');
 
-const db = new Database(path.resolve(__dirname, 'selfgur.db'));
+const dbPath = process.env.DATABASE_PATH || path.resolve(__dirname, 'selfgur.db');
+fs.mkdirSync(path.dirname(dbPath), { recursive: true });
+
+const db = new Database(dbPath);
 
 // Criar tabelas
 db.exec(`
