@@ -8,20 +8,22 @@ const fs = require('fs');
 const { licenses, uploads, adminUsers } = require('./database');
 
 // Garantir que a pasta static existe
-const staticDir = path.resolve(__dirname, 'static');
-if (!fs.existsSync(staticDir)) {
-  fs.mkdirSync(staticDir, { recursive: true });
-  console.log('✓ Pasta static criada com sucesso');
-}
+const PORT = Number(process.env.PORT || 25556);
+const staticDir = process.env.UPLOAD_DIR || path.resolve(__dirname, 'static');
+const sessionSecret = process.env.SESSION_SECRET || 'selfgur-secret-key-change-this-in-production';
+
+fs.mkdirSync(staticDir, { recursive: true });
+console.log(`Uploads em: ${staticDir}`);
 
 const app = express();
+app.set('trust proxy', true);
 
 app.use(express.json());
 app.use(require('express-fileupload')());
 
 // Configurar sessão para o painel admin
 app.use(session({
-  secret: 'selfgur-secret-key-change-this-in-production',
+  secret: sessionSecret,
   resave: false,
   saveUninitialized: false,
   cookie: { maxAge: 24 * 60 * 60 * 1000 } // 24 horas
@@ -36,10 +38,19 @@ const requireAuth = (req, res, next) => {
 };
 
 // Servir arquivos estáticos (sem listagem de diretórios)
-app.use('/static', express.static(path.resolve(__dirname, 'static'), {
+function uploadUrl(req, relativePath) {
+  const baseUrl = process.env.PUBLIC_URL || `${req.protocol}://${req.get('host')}`;
+  return `${baseUrl.replace(/\/$/, '')}/static/${relativePath}`;
+}
+
+app.use('/static', express.static(staticDir, {
   index: false,
   dotfiles: 'deny'
 }));
+
+app.get('/health', (req, res) => {
+  res.send({ ok: true });
+});
 
 // Upload agora usa o banco de dados para validar tokens
 app.post('/upload/:token', (req, res) => {
@@ -58,7 +69,7 @@ app.post('/upload/:token', (req, res) => {
 
   // Criar pasta específica para este cliente (baseada no ID da licença)
   const clientFolder = `cliente_${license.id}_${license.token.substring(0, 15)}`;
-  const clientPath = path.resolve(__dirname, 'static', clientFolder);
+  const clientPath = path.resolve(staticDir, clientFolder);
   
   if (!fs.existsSync(clientPath)) {
     fs.mkdirSync(clientPath, { recursive: true });
@@ -73,8 +84,8 @@ app.post('/upload/:token', (req, res) => {
     const fileSize = image.size;
     const relativePath = `${clientFolder}/${filename}`;
     
-    image.mv(path.resolve(__dirname, 'static', relativePath)).then(() => {
-      const url = `https://${req.headers.host}/static/${relativePath}`;
+    image.mv(path.resolve(staticDir, relativePath)).then(() => {
+      const url = uploadUrl(req, relativePath);
       
       // Registrar upload no banco de dados
       uploads.create(license.id, relativePath, image.name, 'image', fileSize, url);
@@ -101,8 +112,8 @@ app.post('/upload/:token', (req, res) => {
     const fileSize = audio.size;
     const relativePath = `${clientFolder}/${filename}`;
     
-    audio.mv(path.resolve(__dirname, 'static', relativePath)).then(() => {
-      const url = `https://${req.headers.host}/static/${relativePath}`;
+    audio.mv(path.resolve(staticDir, relativePath)).then(() => {
+      const url = uploadUrl(req, relativePath);
       
       // Registrar upload no banco de dados
       uploads.create(license.id, relativePath, audio.name, 'audio', fileSize, url);
@@ -265,7 +276,7 @@ app.delete('/admin/licenses/:id', requireAuth, (req, res) => {
   if (license) {
     // Deletar pasta completa do cliente
     const clientFolder = `cliente_${license.id}_${license.token.substring(0, 15)}`;
-    const clientPath = path.resolve(__dirname, 'static', clientFolder);
+    const clientPath = path.resolve(staticDir, clientFolder);
     
     if (fs.existsSync(clientPath)) {
       // Deletar todos os arquivos dentro da pasta
@@ -313,7 +324,7 @@ app.delete('/admin/uploads/:id', requireAuth, (req, res) => {
   }
   
   // Deletar arquivo físico
-  const filePath = path.resolve(__dirname, 'static', upload.filename);
+  const filePath = path.resolve(staticDir, upload.filename);
   if (fs.existsSync(filePath)) {
     fs.unlinkSync(filePath);
   }
@@ -331,7 +342,7 @@ app.delete('/admin/uploads/license/:licenseId', requireAuth, (req, res) => {
   // Deletar arquivos físicos
   const licenseUploads = uploads.getByLicense(licenseId);
   licenseUploads.forEach(upload => {
-    const filePath = path.resolve(__dirname, 'static', upload.filename);
+    const filePath = path.resolve(staticDir, upload.filename);
     if (fs.existsSync(filePath)) {
       fs.unlinkSync(filePath);
     }
@@ -343,8 +354,8 @@ app.delete('/admin/uploads/license/:licenseId', requireAuth, (req, res) => {
   res.send({ message: 'Todos os uploads da licença foram deletados' });
 });
 
-const server = app.listen(25556, () => {
-  console.log('Listening at port 25556');
+const server = app.listen(PORT, () => {
+  console.log(`Listening at port ${PORT}`);
   console.log('Done!');
 });
 
