@@ -157,6 +157,21 @@ const adminUsers = {
     return stmt.get(username);
   },
 
+  getFirst: () => {
+    const stmt = db.prepare('SELECT * FROM admin_users ORDER BY id ASC LIMIT 1');
+    return stmt.get();
+  },
+
+  updatePassword: (id, hashedPassword) => {
+    const stmt = db.prepare('UPDATE admin_users SET password = ? WHERE id = ?');
+    return stmt.run(hashedPassword, id);
+  },
+
+  updateCredentials: (id, username, hashedPassword) => {
+    const stmt = db.prepare('UPDATE admin_users SET username = ?, password = ? WHERE id = ?');
+    return stmt.run(username, hashedPassword, id);
+  },
+
   exists: () => {
     const stmt = db.prepare('SELECT COUNT(*) as count FROM admin_users');
     return stmt.get().count > 0;

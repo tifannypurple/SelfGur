@@ -6,8 +6,5 @@ npm-debug.log*
 .gitignore
 .env
 .env.*
-selfgur.db
 selfgur.db-shm
 selfgur.db-wal
-static/*
-!static/.gitkeep

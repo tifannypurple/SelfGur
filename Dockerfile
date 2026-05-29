@@ -19,7 +19,10 @@ WORKDIR /app
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
 
-RUN mkdir -p /app/data /app/static && chown -R node:node /app
+RUN if [ -d /app/static ]; then cp -a /app/static /app/static-seed; fi \
+  && chmod +x /app/docker-entrypoint.sh \
+  && mkdir -p /app/data /app/static \
+  && chown -R node:node /app
 
 USER node
 EXPOSE 25556
@@ -27,4 +30,5 @@ EXPOSE 25556
 HEALTHCHECK --interval=30s --timeout=3s --start-period=10s \
   CMD node -e "fetch('http://127.0.0.1:' + (process.env.PORT || 25556) + '/health').then(r => process.exit(r.ok ? 0 : 1)).catch(() => process.exit(1))"
 
+ENTRYPOINT ["/app/docker-entrypoint.sh"]
 CMD ["npm", "start"]

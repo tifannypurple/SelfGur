@@ -517,6 +517,28 @@
         </button>
     </div>
 
+    <!-- Tela de Configuração Inicial -->
+    <div id="setupScreen" class="login-container" style="display: none;">
+        <h2><i class="fas fa-user-shield"></i> Criar Admin</h2>
+        <div id="setupAlert"></div>
+        
+        <div class="form-group">
+            <label>Usuário</label>
+            <input type="text" id="setupUsername" placeholder="Digite seu usuário admin">
+        </div>
+        <div class="form-group">
+            <label>Senha</label>
+            <input type="password" id="setupPassword" placeholder="Digite sua senha">
+        </div>
+        <div class="form-group">
+            <label>Confirmar Senha</label>
+            <input type="password" id="setupConfirmPassword" placeholder="Confirme sua senha">
+        </div>
+        <button class="btn btn-primary" style="width: 100%;" onclick="setupAdmin()">
+            <i class="fas fa-check"></i> Criar Admin
+        </button>
+    </div>
+
     <!-- Painel Principal -->
     <div id="mainPanel" style="display: none;">
         <div class="container">
@@ -744,6 +766,8 @@
                 if (data.authenticated) {
                     currentUser = data.username;
                     showMainPanel();
+                } else if (data.needsSetup) {
+                    showSetupScreen();
                 } else {
                     showLoginScreen();
                 }
@@ -754,14 +778,62 @@
 
         function showLoginScreen() {
             document.getElementById('loginScreen').style.display = 'block';
+            document.getElementById('setupScreen').style.display = 'none';
+            document.getElementById('mainPanel').style.display = 'none';
+        }
+
+        function showSetupScreen() {
+            document.getElementById('loginScreen').style.display = 'none';
+            document.getElementById('setupScreen').style.display = 'block';
             document.getElementById('mainPanel').style.display = 'none';
         }
 
         function showMainPanel() {
             document.getElementById('loginScreen').style.display = 'none';
+            document.getElementById('setupScreen').style.display = 'none';
             document.getElementById('mainPanel').style.display = 'block';
             document.getElementById('usernameDisplay').textContent = currentUser;
             loadDashboard();
+        }
+
+        async function setupAdmin() {
+            const username = document.getElementById('setupUsername').value;
+            const password = document.getElementById('setupPassword').value;
+            const confirmPassword = document.getElementById('setupConfirmPassword').value;
+            
+            if (!username || !password || !confirmPassword) {
+                showAlert('setupAlert', 'Preencha todos os campos', 'error');
+                return;
+            }
+            
+            if (password !== confirmPassword) {
+                showAlert('setupAlert', 'As senhas não coincidem', 'error');
+                return;
+            }
+            
+            if (password.length < 4) {
+                showAlert('setupAlert', 'A senha deve ter pelo menos 4 caracteres', 'error');
+                return;
+            }
+            
+            try {
+                const response = await fetch('/admin/setup', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ username, password })
+                });
+                
+                const data = await response.json();
+                
+                if (response.ok) {
+                    showAlert('setupAlert', 'Admin criado com sucesso. Faça login.', 'success');
+                    setTimeout(showLoginScreen, 1000);
+                } else {
+                    showAlert('setupAlert', data.message, 'error');
+                }
+            } catch (error) {
+                showAlert('setupAlert', 'Erro ao criar admin', 'error');
+            }
         }
 
         async function login() {

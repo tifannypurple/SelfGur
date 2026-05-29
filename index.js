@@ -18,6 +18,30 @@ console.log(`Uploads em: ${staticDir}`);
 const app = express();
 app.set('trust proxy', true);
 
+function bootstrapAdmin() {
+  const username = process.env.ADMIN_USERNAME;
+  const password = process.env.ADMIN_PASSWORD;
+
+  if (!username || !password) return;
+
+  const hashedPassword = bcrypt.hashSync(password, 10);
+  const existingAdmin = adminUsers.findByUsername(username);
+
+  if (!adminUsers.exists()) {
+    adminUsers.create(username, hashedPassword);
+    console.log(`Admin inicial criado: ${username}`);
+    return;
+  }
+
+  if (process.env.ADMIN_RESET_PASSWORD === 'true') {
+    const adminToReset = existingAdmin || adminUsers.getFirst();
+    adminUsers.updateCredentials(adminToReset.id, username, hashedPassword);
+    console.log(`Senha do admin redefinida: ${username}`);
+  }
+}
+
+bootstrapAdmin();
+
 app.use(express.json());
 app.use(require('express-fileupload')());
 
@@ -175,7 +199,7 @@ app.get('/admin/check', (req, res) => {
   if (req.session && req.session.adminId) {
     res.send({ authenticated: true, username: req.session.username });
   } else {
-    res.send({ authenticated: false });
+    res.send({ authenticated: false, needsSetup: !adminUsers.exists() });
   }
 });
 
@@ -218,9 +242,7 @@ app.post('/admin/change-password', requireAuth, async (req, res) => {
   }
   
   const hashedNewPassword = await bcrypt.hash(newPassword, 10);
-  const { db } = require('./database');
-  const stmt = db.prepare('UPDATE admin_users SET password = ? WHERE id = ?');
-  stmt.run(hashedNewPassword, admin.id);
+  adminUsers.updatePassword(admin.id, hashedNewPassword);
   
   res.send({ message: 'Senha alterada com sucesso' });
 });
