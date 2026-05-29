@@ -80,12 +80,21 @@ app.post('/upload/:token', (req, res) => {
       uploads.create(license.id, relativePath, image.name, 'image', fileSize, url);
       
       console.log(`[${datetime}] Token: ${token} | Licença: ${license.name} | Pasta: ${clientFolder} | url = ${url}`);
-      res.send({ url });
-    }).catch(err => res.status(500).send({ message: err.message }));
+      res.send({ 
+        success: true,
+        url,
+        filename,
+        originalName: image.name,
+        type: 'image',
+        size: fileSize,
+        path: relativePath,
+        license: license.name
+      });
+    }).catch(err => res.status(500).send({ success: false, message: err.message }));
 
   } else if (audio) {
     if (!audio.mimetype.includes('webm')) {
-      return res.status(400).send({ message: 'Audio mimetype must be webm' });
+      return res.status(400).send({ success: false, message: 'Audio mimetype must be webm' });
     }
 
     const filename = uuid.v4() + '.webm';
@@ -99,11 +108,20 @@ app.post('/upload/:token', (req, res) => {
       uploads.create(license.id, relativePath, audio.name, 'audio', fileSize, url);
       
       console.log(`[${datetime}] Token: ${token} | Licença: ${license.name} | Pasta: ${clientFolder} | url = ${url}`);
-      res.send({ url });
-    }).catch(err => res.status(500).send({ message: err.message }));
+      res.send({ 
+        success: true,
+        url,
+        filename,
+        originalName: audio.name,
+        type: 'audio',
+        size: fileSize,
+        path: relativePath,
+        license: license.name
+      });
+    }).catch(err => res.status(500).send({ success: false, message: err.message }));
     
   } else {
-    res.status(400).send({ message: 'Missing image/audio field' });
+    res.status(400).send({ success: false, message: 'Missing image/audio field' });
   }
 });
 
