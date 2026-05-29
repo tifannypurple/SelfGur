@@ -5,7 +5,7 @@ const WebSocket = require('ws');
 const session = require('express-session');
 const bcrypt = require('bcryptjs');
 const fs = require('fs');
-const { licenses, uploads, adminUsers } = require('./database');
+const { db, licenses, uploads, adminUsers } = require('./database');
 
 // Garantir que a pasta static existe
 const PORT = Number(process.env.PORT || 25556);
@@ -245,6 +245,125 @@ app.post('/admin/change-password', requireAuth, async (req, res) => {
   adminUsers.updatePassword(admin.id, hashedNewPassword);
   
   res.send({ message: 'Senha alterada com sucesso' });
+});
+
+function walkFiles(dir, baseDir = dir) {
+  if (!fs.existsSync(dir)) return [];
+
+  return fs.readdirSync(dir, { withFileTypes: true }).flatMap(entry => {
+    const fullPath = path.join(dir, entry.name);
+
+    if (entry.isDirectory()) {
+      return walkFiles(fullPath, baseDir);
+    }
+
+    if (!entry.isFile()) return [];
+
+    return [{
+      path: path.relative(baseDir, fullPath).replace(/\\/g, '/'),
+      content: fs.readFileSync(fullPath).toString('base64')
+    }];
+  });
+}
+
+function emptyDir(dir) {
+  if (!fs.existsSync(dir)) return;
+
+  fs.readdirSync(dir, { withFileTypes: true }).forEach(entry => {
+    const fullPath = path.join(dir, entry.name);
+
+    if (entry.isDirectory()) {
+      fs.rmSync(fullPath, { recursive: true, force: true });
+    } else {
+      fs.unlinkSync(fullPath);
+    }
+  });
+}
+
+function safeStaticPath(relativePath) {
+  const targetPath = path.resolve(staticDir, relativePath);
+  const rootPath = path.resolve(staticDir);
+
+  if (targetPath !== rootPath && !targetPath.startsWith(rootPath + path.sep)) {
+    throw new Error('Backup contem caminho de arquivo invalido');
+  }
+
+  return targetPath;
+}
+
+app.get('/admin/backup', requireAuth, (req, res) => {
+  const backup = {
+    version: 1,
+    created_at: new Date().toISOString(),
+    database: {
+      licenses: db.prepare('SELECT * FROM licenses ORDER BY id').all(),
+      uploads: db.prepare('SELECT * FROM uploads ORDER BY id').all(),
+      admin_users: db.prepare('SELECT * FROM admin_users ORDER BY id').all()
+    },
+    files: walkFiles(staticDir)
+  };
+
+  const stamp = new Date().toISOString().replace(/[:.]/g, '-');
+  res.setHeader('Content-Type', 'application/json');
+  res.setHeader('Content-Disposition', `attachment; filename="selfgur-backup-${stamp}.json"`);
+  res.send(JSON.stringify(backup));
+});
+
+app.post('/admin/backup/restore', requireAuth, (req, res) => {
+  const backupFile = req.files && req.files.backup;
+
+  if (!backupFile) {
+    return res.status(400).send({ message: 'Arquivo de backup obrigatorio' });
+  }
+
+  let backup;
+  try {
+    backup = JSON.parse(backupFile.data.toString('utf8'));
+  } catch (error) {
+    return res.status(400).send({ message: 'Backup invalido' });
+  }
+
+  if (!backup || backup.version !== 1 || !backup.database || !Array.isArray(backup.files)) {
+    return res.status(400).send({ message: 'Formato de backup nao suportado' });
+  }
+
+  const restoreDatabase = db.transaction(() => {
+    db.prepare('DELETE FROM uploads').run();
+    db.prepare('DELETE FROM licenses').run();
+    db.prepare('DELETE FROM admin_users').run();
+
+    const insertLicense = db.prepare(`
+      INSERT INTO licenses (id, token, name, active, created_at, updated_at)
+      VALUES (@id, @token, @name, @active, @created_at, @updated_at)
+    `);
+    const insertUpload = db.prepare(`
+      INSERT INTO uploads (id, license_id, filename, original_name, type, size, url, created_at)
+      VALUES (@id, @license_id, @filename, @original_name, @type, @size, @url, @created_at)
+    `);
+    const insertAdmin = db.prepare(`
+      INSERT INTO admin_users (id, username, password, created_at)
+      VALUES (@id, @username, @password, @created_at)
+    `);
+
+    (backup.database.licenses || []).forEach(row => insertLicense.run(row));
+    (backup.database.admin_users || []).forEach(row => insertAdmin.run(row));
+    (backup.database.uploads || []).forEach(row => insertUpload.run(row));
+  });
+
+  try {
+    restoreDatabase();
+    emptyDir(staticDir);
+
+    backup.files.forEach(file => {
+      const targetPath = safeStaticPath(file.path);
+      fs.mkdirSync(path.dirname(targetPath), { recursive: true });
+      fs.writeFileSync(targetPath, Buffer.from(file.content, 'base64'));
+    });
+
+    res.send({ message: 'Backup restaurado com sucesso' });
+  } catch (error) {
+    res.status(500).send({ message: `Erro ao restaurar backup: ${error.message}` });
+  }
 });
 
 // ==================== LICENÇAS ====================

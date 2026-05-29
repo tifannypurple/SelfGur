@@ -55,6 +55,14 @@ ADMIN_RESET_PASSWORD=true
 
 Depois faca redeploy, entre com esse usuario e senha, e volte `ADMIN_RESET_PASSWORD` para `false`.
 
+## Backups pelo painel
+
+No painel `/admin`, a aba **Licencas** tem:
+
+- **Backup**: baixa um arquivo `.json` com licencas, usuarios admin, registros de uploads e arquivos salvos.
+- **Enviar Backup**: restaura um backup baixado antes. Isso substitui o banco e os arquivos atuais.
+- **Limpar** em cada licenca: deleta imagens/audios e registros de upload daquela licenca, sem apagar a licenca.
+
 ## Banco e imagens antigos
 
 O Dockerfile envia o `selfgur.db` e a pasta `static` atuais junto com a imagem.

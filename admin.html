@@ -603,9 +603,18 @@
             <div id="licensesPanel" class="panel">
                 <div class="panel-header">
                     <h2>Gerenciar Licenças</h2>
-                    <button class="btn btn-primary" onclick="showCreateLicenseModal()">
-                        <i class="fas fa-plus"></i> Nova Licença
-                    </button>
+                    <div class="actions">
+                        <button class="btn btn-info" onclick="downloadBackup()">
+                            <i class="fas fa-download"></i> Backup
+                        </button>
+                        <button class="btn btn-warning" onclick="document.getElementById('backupFileInput').click()">
+                            <i class="fas fa-upload"></i> Enviar Backup
+                        </button>
+                        <button class="btn btn-primary" onclick="showCreateLicenseModal()">
+                            <i class="fas fa-plus"></i> Nova Licença
+                        </button>
+                        <input type="file" id="backupFileInput" accept="application/json,.json" style="display: none;" onchange="uploadBackup(this)">
+                    </div>
                 </div>
                 
                 <div id="licensesTable"></div>
@@ -936,6 +945,43 @@
             if (tab === 'uploads') loadUploads();
         }
 
+        function downloadBackup() {
+            window.location.href = '/admin/backup';
+        }
+
+        async function uploadBackup(input) {
+            const file = input.files && input.files[0];
+            input.value = '';
+
+            if (!file) return;
+
+            const confirmed = confirm('Restaurar este backup vai substituir o banco atual e os arquivos enviados. Continuar?');
+            if (!confirmed) return;
+
+            const formData = new FormData();
+            formData.append('backup', file);
+
+            try {
+                const response = await fetch('/admin/backup/restore', {
+                    method: 'POST',
+                    body: formData
+                });
+                const data = await response.json();
+
+                if (!response.ok) {
+                    alert(data.message || 'Erro ao restaurar backup');
+                    return;
+                }
+
+                alert('Backup restaurado com sucesso. Faça login novamente se a sessão cair.');
+                loadDashboard();
+                loadLicenses();
+                loadUploads();
+            } catch (error) {
+                alert('Erro ao enviar backup');
+            }
+        }
+
         async function loadDashboard() {
             try {
                 const [licensesRes, uploadsRes] = await Promise.all([
@@ -1037,6 +1083,9 @@
                                             </button>
                                             <button class="btn btn-primary btn-small" onclick="viewLicenseUploads(${l.id}, '${l.name}')">
                                                 <i class="fas fa-folder-open"></i> Uploads
+                                            </button>
+                                            <button class="btn btn-info btn-small" onclick="clearLicenseUploads(${l.id}, '${l.name}', ${l.total_uploads || 0})" title="Deletar arquivos sem apagar licença">
+                                                <i class="fas fa-broom"></i> Limpar
                                             </button>
                                             <button class="btn ${l.active ? 'btn-warning' : 'btn-success'} btn-small" 
                                                     onclick="toggleLicense(${l.id}, ${!l.active})">
@@ -1249,6 +1298,33 @@ Qualquer dúvida, entre em contato!`;
                 loadDashboard();
             } catch (error) {
                 alert('Erro ao deletar licença');
+            }
+        }
+
+        async function clearLicenseUploads(id, name, totalUploads) {
+            if (!totalUploads) {
+                alert('Esta licença não tem arquivos para deletar.');
+                return;
+            }
+
+            const confirmed = confirm(`Deletar todos os arquivos de "${name}"?\n\nA licença vai continuar existindo, mas os uploads e imagens/áudios dela serão removidos.`);
+            if (!confirmed) return;
+            
+            try {
+                const response = await fetch(`/admin/uploads/license/${id}`, { method: 'DELETE' });
+                const data = await response.json();
+
+                if (!response.ok) {
+                    alert(data.message || 'Erro ao limpar arquivos');
+                    return;
+                }
+
+                loadLicenses();
+                loadDashboard();
+                loadUploads();
+                alert('Arquivos deletados. A licença foi mantida.');
+            } catch (error) {
+                alert('Erro ao limpar arquivos');
             }
         }
 
